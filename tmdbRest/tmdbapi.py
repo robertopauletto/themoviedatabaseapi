@@ -209,7 +209,7 @@ def session_factory(media_type: str, apy_key: str, language=None):
 
 
 if __name__ == '__main__':
-    k = '142b8d3c9048ff091ada7cd22ca6dff0'
+    k = 'secret'
     s = session_factory('tv', k)
     title = 'Girls'
     # shows = s.search_show(title, exact=True)
