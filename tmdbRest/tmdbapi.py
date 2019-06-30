@@ -2,8 +2,10 @@
 
 import enum
 import json
+import os
 from pprint import pprint
 import requests
+from typing import Type
 import tmdbRest.entities as ent
 import tmdbRest.genres as generi
 
@@ -22,7 +24,7 @@ class Media(enum.Enum):
 
 
 class SearchType(enum.Enum):
-    """Type of search"""
+    """Search types"""
     company = 0
     collection = 1
     keyword = 2
@@ -33,9 +35,14 @@ class SearchType(enum.Enum):
 
 
 def _parse_media(value: str) -> Media:
+    """
+    Detect media type by keywords
+    :param value:
+    :return:
+    """
     if value.lower() in 'movies films cinema':
         return Media.movie
-    elif value.lower() in 'tv television t.v.':
+    elif value.lower() in 'tv television t.v. tube tele':
         return Media.tv
     return Media.unknown
 
@@ -68,18 +75,18 @@ def _get_route(action: str,  params):
     """
     Compose the api call, depending on `media`
     :param action: action to perform
-    :param subroute: media type
     :return:the call to tmdb
     """
     if action not in ROUTES:
         return None
     if not isinstance(params, tuple):
         params = params,
-    print()
+    # print()
     return f"{ROUTES['root']}{ROUTES[action].format(*params)}"
 
 
 class TmDBSessionException(Exception):
+    """Generic custom app execption"""
     pass
 
 
@@ -87,15 +94,21 @@ class TmDBSession:
     """Manage info via themoviedb API"""
     def __init__(self, api_key: str, language=None, media=Media.unknown):
         """
-        Gets the private authentication key
         :param api_key: the secret key
         :param language: language used (may lack some translations, dependeing
-                         on language (defaults to en-US)
+                         on language - defaults to en-US)
         :param media: the actual media will be set in the subclasses
         """
         self._api_key = api_key
         self._lang = language or 'en-US'
         self._media = media
+        self._genres = list()
+
+    @property
+    def genres(self):
+        if not self._genres:
+            return self._get_genres()
+        return self._genres
 
     @property
     def language(self) -> str:
@@ -119,8 +132,13 @@ class TmDBSession:
         payload = {'api_key': self._api_key, 'language': self._lang}
         return payload
 
-    def search(self, query, search_type: SearchType, **kwargs):
-        """Generic search"""
+    def search(self, query, search_type: SearchType) -> dict:
+        """
+        Generic search
+        :param query:
+        :param search_type:
+        :return:
+        """
         route = _get_route('find', search_type.name)
         payload = self._get_payload()
         payload['query'] = query
@@ -139,15 +157,14 @@ class TmDBSession:
         resp = requests.get(route, payload)
         return resp.json()
 
-    def genres(self, search_type: SearchType) -> list:
+    def _get_genres(self):
         """Get a list of genres in the form of id, name"""
-        route = _get_route('genres', search_type)
+        route = _get_route('genres', self._media.name)
         payload = self._get_payload()
         resp = requests.get(route, payload)
-        genres_ = list()
+        self._genres = list()
         for genre in resp.json()['genres']:
-            genres_.append((genre['id'], genre['name']))
-        return genres_
+            self._genres.append((genre['id'], genre['name']))
 
 
 class TmDBMovieSession(TmDBSession):
@@ -163,6 +180,11 @@ class TmDBTvSession(TmDBSession):
 
     def search_show(self, showname: str, exact=False):
         resp = self.search(showname, SearchType.tv)
+        if 'success' in resp and not resp['success']:
+            raise TmDBSessionException(
+                f"Operation failed:\n"
+                f"{resp['status_code']} - {resp['status_message']}"
+            )
         shows = [ent.TvShowFromSearch(show) for show in resp['results']]
         if exact:
             return [show for show in shows
@@ -186,7 +208,8 @@ class TmDBTvSession(TmDBSession):
         seasons = list()
         show = self.get_show(show_id)
         for season_no in range(0, show.tot_seasons):
-            seasons.append(self.get_season(show.id, season_no+1))
+            season = self.get_season(show.id, season_no+1)
+            seasons.append(ent.Season.parse_season(season))
         return show, seasons
 
     def get_show_seasons_and_episodes(self, show_id: int) -> tuple:
@@ -199,7 +222,8 @@ class TmDBTvSession(TmDBSession):
         pass  # TODO:
 
 
-def session_factory(media_type: str, apy_key: str, language=None):
+def session_factory(media_type: str, apy_key: str,
+                    language=None):
     if _parse_media(media_type.lower()) == Media.movie:
         return TmDBMovieSession(apy_key, language)
     elif _parse_media(media_type.lower()) == Media.tv:
@@ -208,14 +232,20 @@ def session_factory(media_type: str, apy_key: str, language=None):
         raise TmDBSessionException(f'media {media_type} unknown')
 
 
+
 if __name__ == '__main__':
-    k = 'secret'
+    k = os.environ.get('TMDB_API_KEY', 'secret')
+    print(k)
     s = session_factory('tv', k)
-    title = 'Girls'
+    # title = 'Grimm'
     # shows = s.search_show(title, exact=True)
-    #shows = s.search_show('swamp thing', exact=True)
+    # shows = s.search_show('swamp thing', exact=True)
     # print('\n'.join([str(show) for show in shows]))
     supergirl = 62688
     # show = s.get_show(supergirl)
     show, seasons = s.get_show_and_seasons(supergirl)
-    print("Done")
+    for season in seasons:
+        print(f'Season {season.season_number} '
+              f'({len(season.episodes):02} episodes)')
+        for episode in season.episodes:
+            print(f'\t{episode.number:02} - {episode.name}')

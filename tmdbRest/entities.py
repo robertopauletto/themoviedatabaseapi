@@ -1,13 +1,32 @@
 # entities.py
 
 import datetime
-
+import enum
 
 __doc__ = """entities.py"""
 __version__ = "0.1"
 __changelog__ = """
 
 """
+
+
+class Gender(enum.Enum):
+    male = 2
+    female = 1
+    undefined = 0
+    unknown = -1
+
+    @staticmethod
+    def parse(value):
+        value = int(value)
+        if value == 1:
+            return Gender.female
+        elif value == 2:
+            return Gender.male
+        elif value == 0:
+            return Gender.undefined
+        else:
+            return Gender.unknown
 
 
 class Entity:
@@ -115,6 +134,30 @@ class Person(Entity):
         return self._results['profile_path']
 
 
+class Character(Entity):
+    """Represents a character"""
+    def __init__(self, results):
+        Entity.__init__(self, results)
+        self._charname = results.get('character', '')
+        self._gender = Gender.parse(results.get('gender', 0))
+
+    @property
+    def performer(self):
+        return self.name
+
+    @property
+    def character(self):
+        return self._charname
+
+    @@property
+    def gender(self):
+        return self._gender.name
+
+    @staticmethod
+    def parse(results):
+        return [Character(result) for result in results]
+
+
 class TvShowFromSearch(Entity):
     """Represent a TV Show as a result from a search"""
     def __init__(self, results):
@@ -136,6 +179,7 @@ class TvShow(TvShowFromSearch):
     def __init__(self, results):
         Entity.__init__(self, results)
         self.seasons = list()
+        self._characters = (Character.parse(results['guest_stars']))
 
     def is_in_production(self):
         """
@@ -203,18 +247,33 @@ class Season(Entity):
         return season
 
 
-class Episode(Season):
+class Episode(Entity):
     """Represent a TV Show episode"""
     def __init__(self, results):
         Entity.__init__(self, results)
+        self._crew = results['crew']
+        self._characters =
+        self._guest_stars = results['guest_stars']
+
+    @property
+    def air_date(self):
+        return self._results.get('air_date', None)
 
     @property
     def number(self) -> int:
-        return self._results['number']
+        return self._results['episode_number']
+
+    @property
+    def season_number(self):
+        return self._results['season_number']
 
     @property
     def vote_avg_cnt(self) -> tuple:
         return self._results['vote_average'], self._results['vote_count']
+
+    @property
+    def overview(self):
+        return self._results.get('overview', '')
 
 
 if __name__ == '__main__':
