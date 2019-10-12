@@ -2,8 +2,10 @@
 
 import datetime
 import enum
+from typing import List, Union, Any, ClassVar, Tuple
 
-__doc__ = """entities.py"""
+
+__doc__ = """Objects used by the TMDB API Wrapper"""
 __version__ = "0.1"
 __changelog__ = """
 
@@ -11,6 +13,7 @@ __changelog__ = """
 
 
 class Gender(enum.Enum):
+    """Performer gender"""
     male = 2
     female = 1
     undefined = 0
@@ -30,7 +33,7 @@ class Gender(enum.Enum):
 
 
 class Entity:
-    """Represent a generic entity related to Movies, TV Shows, People etc."""
+    """Represents a generic entity related to Movies, TV Shows, People etc."""
     date_fmt = '%Y-%m-%d'
 
     def __init__(self, results: dict):
@@ -39,15 +42,15 @@ class Entity:
 
     @property
     def id(self):
-        """Generid unique identifier"""
+        """Unique identifier"""
         return self._results.get('id', None)
 
     @property
-    def name(self):
+    def name(self) -> Union[str, None]:
         """Entity name"""
         return self._results.get('name', '')
 
-    def _get_value(self, key: str):
+    def _get_value(self, key: str) -> Union[str, None]:
         """
         Get the value of `key`
         :param key:
@@ -64,53 +67,9 @@ class Entity:
             return self._results['vote_average'], self._results['vote_count']
         return None, None
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """String representation"""
         return f'{self.id} - {self.name}'
-
-
-class Configuration(Entity):
-    """Contains common support data for all entities"""
-    def __init__(self, results):
-        Entity.__init__(self, results)
-        self.profile_sizes = self._results['images']['profile_sizes']
-        self.poster_sizes = self._results['images']['poster_sizes']
-        self.still_sizes = self._results['images']['still_sizes']
-
-    @property
-    def img_base_url(self):
-        """Base url for an image"""
-        return self._results['images']['base_url']
-
-    def profile_img_path(self, size: str):
-        """Get the profile image path
-
-        :param size: a valid size contained in `profile_sizes`
-        :return:
-        """
-        if not size or size not in self.profile_sizes:
-            size = 'original'
-        return f'{self.img_base_url}{size}/'
-
-    def poster_img_path(self, size: str):
-        """Get the poster image path
-
-        :param size: a valid size contained in `profile_sizes`
-        :return:
-        """
-        if not size or size not in self.poster_sizes:
-            size = 'original'
-        return f'{self.img_base_url}{size}/'
-
-    def still_img_path(self, size: str):
-        """Get the poster image path
-
-        :param size: a valid size contained in `profile_sizes`
-        :return:
-        """
-        if not size or size not in self.still_sizes:
-            size = 'original'
-        return f'{self.img_base_url}{size}/'
 
 
 class Person(Entity):
@@ -142,15 +101,15 @@ class Character(Entity):
         self._gender = Gender.parse(results.get('gender', 0))
 
     @property
-    def performer(self):
+    def performer(self) -> str:
         return self.name
 
     @property
-    def character(self):
+    def character(self) -> str:
         return self._charname
 
     @property
-    def gender(self):
+    def gender(self) -> str:
         return self._gender.name
 
     @staticmethod
@@ -159,7 +118,7 @@ class Character(Entity):
 
 
 class TvShowFromSearch(Entity):
-    """Represent a TV Show as a result from a search"""
+    """Represents a TV Show as a result from a search"""
     def __init__(self, results):
         Entity.__init__(self, results)
 
@@ -175,25 +134,25 @@ class TvShowFromSearch(Entity):
 
 
 class TvShow(TvShowFromSearch):
-    """Represent a TV Show """
+    """Represents a TV Show """
     def __init__(self, results):
         Entity.__init__(self, results)
         self.seasons = list()
         # self._characters = (Character.parse(results['guest_stars']))
 
-    def is_in_production(self):
+    def is_in_production(self) -> str:
         """
         :return: `True` is the show is running
         """
         return self._get_value('in_production')
 
     @property
-    def homepage(self):
+    def homepage(self) -> str:
         """Show homepage url"""
         return self._get_value('homepage')
 
     @property
-    def tot_seasons(self):
+    def tot_seasons(self) :
         """Get the number of seasons"""
         return self._get_value('number_of_seasons')
 
@@ -223,7 +182,7 @@ class TvShow(TvShowFromSearch):
 
 
 class Season(Entity):
-    """Represent a TV Show season"""
+    """Represents a TV Show season"""
     def __init__(self, results: dict):
         Entity.__init__(self, results)
         self.episodes = list()
@@ -274,6 +233,21 @@ class Episode(Entity):
     @property
     def overview(self):
         return self._results.get('overview', '')
+
+
+class DailyTvPrograms:
+    """Programs airing today """
+
+    def __init__(self, resp_json: dict):
+        self._resp = resp_json
+
+    @property
+    def total_results(self) -> int:
+        return int(self._resp['total_results']) or 0
+
+    def get_shows(self) -> List[Tuple[int, str]]:
+        """Return the shows on air today"""
+        return [(show['id'], show['name']) for show in self._resp['results']]
 
 
 if __name__ == '__main__':

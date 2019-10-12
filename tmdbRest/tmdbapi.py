@@ -11,6 +11,7 @@ from typing import Type, ClassVar, Union, Any, Optional, List, Tuple, Generic
 
 import entities as ent
 
+
 __doc__ = """Wrapper to 'The Movie Database APIs"""
 __version__ = "0.2"
 __changelog__ = """
@@ -61,13 +62,15 @@ ROUTES = {
     'item': r'{}/{}',  # Generic item by id
     'episode': r'tv/{}/season/{}/episode/{}',  # Tv episode detail
     'season': r'tv/{}/season/{}',  # Tv season
+    'airing_today': r'tv/airing_today'  # Programs of the day
 }
 
 
-def _get_route(action: str,  params: Union[tuple, Any]) -> Union[str, None]:
+def get_route(action: str, params: Union[tuple, Any]) -> Union[str, None]:
     """
     Compose the api call, depending on `media`
     :param action: action to perform
+    :param params: route parameters
     :return:the call to tmdb
     """
     if action not in ROUTES:
@@ -94,7 +97,6 @@ class PosterSizes(_Sizes):
     w342: ClassVar['str'] = "w342"
     w500: ClassVar['str'] = "w500"
     w780: ClassVar['str'] = "w780"
-
 
 
 class TmDBSessionException(Exception):
@@ -136,7 +138,7 @@ class TmDBSession:
         """
         self._lang = value
 
-    def _get_payload(self) -> dict:
+    def get_payload(self) -> dict:
         """
         Gets the payload with the api key, the caller will extend the
         dict with the parameters required by the specific api
@@ -151,28 +153,28 @@ class TmDBSession:
         :param search_type:
         :return:
         """
-        route = _get_route('find', search_type.name)
-        payload = self._get_payload()
+        route = get_route('find', search_type.name)
+        payload = self.get_payload()
         payload['query'] = query
         resp = requests.get(route, payload)
         return resp.json()
 
     def get_item(self, id, search_type: SearchType):
-        route = _get_route('item', (search_type.name, id))
-        payload = self._get_payload()
+        route = get_route('item', (search_type.name, id))
+        payload = self.get_payload()
         resp = requests.get(route, payload)
         return resp.json()
 
     def get_season(self, show_id: int, season_no: int):
-        route = _get_route('season', (show_id, season_no))
-        payload = self._get_payload()
+        route = get_route('season', (show_id, season_no))
+        payload = self.get_payload()
         resp = requests.get(route, payload)
         return resp.json()
 
     def _get_genres(self):
         """Get a list of genres in the form of id, name"""
-        route = _get_route('genres', self._media.name)
-        payload = self._get_payload()
+        route = get_route('genres', self._media.name)
+        payload = self.get_payload()
         resp = requests.get(route, payload)
         self._genres = list()
         for genre in resp.json()['genres']:
@@ -247,6 +249,14 @@ class TmDBTvSession(TmDBSession):
         """
         pass  # TODO:
 
+    def airing_today(self) -> ent.DailyTvPrograms:
+        route = get_route('airing_today', None)
+        payload = self.get_payload()
+        payload['language'] = self.language
+        resp = requests.get(route, payload)
+        at = ent.DailyTvPrograms(resp.json())
+        return at
+
 
 class Configuration:
     """Some generic info needed for image managing"""
@@ -264,8 +274,8 @@ class Configuration:
     def getconfig(session: TmDBSession) -> Any:
         """Get a `Configuration` object"""
         conf = Configuration()
-        route = _get_route('config', None)
-        payload = session._get_payload()
+        route = get_route('config', None)
+        payload = session.get_payload()
         resp = requests.get(route, payload).json()
         conf.img_base_url = resp['images']['base_url']
         conf.img_secure_base_url = resp['images']['secure_base_url']
@@ -287,7 +297,7 @@ def session_factory(media_type: str, apy_key: str,
 
     :param media_type: media to query (tv or movie)
     :param apy_key: the secret TMDB api key
-    :param language: localization value (ed. it for Italian, fr for French ...
+    :param lang: localization value (ed. it for Italian, fr for French ...
     :return: the approriate `TMDBSession` object
     """
     if _parse_media(media_type.lower()) == Media.movie:
@@ -343,6 +353,7 @@ def get_image(apikey: str, show_id: str, local_folder: str,
                local_filename)
 
 
+
 def SampleUsagesTV(session: TmDBTvSession, usage: str, *args):
     """Demonstrate main usages"""
     if usage == 'find exact':
@@ -353,6 +364,8 @@ def SampleUsagesTV(session: TmDBTvSession, usage: str, *args):
         return session.get_show(args[0])
     elif usage == 'get seasons':
         return session.get_show_and_seasons(62688)
+    elif usage == 'air today':
+        return session.airing_today()
 
 
 if __name__ == '__main__':
@@ -360,12 +373,16 @@ if __name__ == '__main__':
     session = session_factory('tv', apikey)
     print(SampleUsagesTV(session, 'find exact', 'Grimm'))
     print(SampleUsagesTV(session, 'find many', 'Swamp Thing'))
-    print(SampleUsagesTV(session, 'get show', 62688))
-    show, seasons = SampleUsagesTV(session, 'get seasons', 62688)
-    for season in seasons:
-        print(f'Season {season.season_number} '
-              f'({len(season.episodes):02} episodes)')
-        for episode in season.episodes:
-            print(f'\t{episode.number:02} - {episode.name}')
+    at = SampleUsagesTV(session, 'air today')
+    print(at.total_results)
+    print(at.get_shows())
+
+    # print(SampleUsagesTV(session, 'get show', 62688))
+    # show, seasons = SampleUsagesTV(session, 'get seasons', 62688)
+    # for season in seasons:
+    #     print(f'Season {season.season_number} '
+    #           f'({len(season.episodes):02} episodes)')
+    #     for episode in season.episodes:
+    #         print(f'\t{episode.number:02} - {episode.name}')
 
 
