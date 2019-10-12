@@ -5,7 +5,8 @@ import json
 import os
 from pprint import pprint
 import requests
-from typing import Type
+import shutil
+from typing import Type, ClassVar
 import tmdbRest.entities as ent
 import tmdbRest.genres as generi
 
@@ -14,6 +15,8 @@ __version__ = "0.1"
 __changelog__ = """
 
 """
+
+k = '142b8d3c9048ff091ada7cd22ca6dff0'
 
 
 class Media(enum.Enum):
@@ -49,6 +52,7 @@ def _parse_media(value: str) -> Media:
 
 ROUTES = {
     'root': r'https://api.themoviedb.org/3/',
+    'config': r'configuration',
     'new_session': r'authentication/session/new',
     'find': r'search/{}',  # Generic
     'genres': r'genre/{}/list',  # Movies or TV
@@ -83,6 +87,49 @@ def _get_route(action: str,  params):
         params = params,
     # print()
     return f"{ROUTES['root']}{ROUTES[action].format(*params)}"
+
+
+
+class _Sizes:
+    original: ClassVar['str'] = "original"
+
+
+class PosterSizes(_Sizes):
+    w92: ClassVar['str'] = "w92"
+    w154: ClassVar['str'] = "w154"
+    w185: ClassVar['str'] = "w185"
+    w342: ClassVar['str'] = "w342"
+    w500: ClassVar['str'] = "w500"
+    w780: ClassVar['str'] = "w780"
+
+
+class Configuration:
+    """Site wide infos"""
+    def __init__(self):
+        self.img_base_url = None
+        self.img_secure_base_url = None
+        self.img_backdrop_sizes = list()
+        self.img_logo_sizes = list()
+        self.img_poster_sizes = list()
+        self.img_profile_sizes = list()
+        self.img_still_sizes = list()
+        self.change_keys = list()
+
+    @staticmethod
+    def getconfig(session):
+        conf = Configuration()
+        route = _get_route('config', None)
+        payload = session._get_payload()
+        resp = requests.get(route, payload).json()
+        conf.img_base_url = resp['images']['base_url']
+        conf.img_secure_base_url = resp['images']['secure_base_url']
+        conf.img_backdrop_sizes = resp['images']['backdrop_sizes']
+        conf.img_logo_sizes = resp['images']['logo_sizes']
+        conf.img_poster_sizes = resp['images']['poster_sizes']
+        conf.img_profile_sizes = resp['images']['profile_sizes']
+        conf.img_still_sizes = resp['images']['still_sizes']
+        conf.change_keys = resp['change_keys']
+        return conf
 
 
 class TmDBSessionException(Exception):
@@ -232,9 +279,42 @@ def session_factory(media_type: str, apy_key: str,
         raise TmDBSessionException(f'media {media_type} unknown')
 
 
+def _get_image(conf: Configuration, img_name: str,
+              size, local_path: str, local_filename: str, secure: bool = True):
+    """
+    Download a series poster with `image_name` to `local_path`, naming the file
+    `local_filename`, if `local_filename` is `None` the filename will be the
+    `img_name'.
+
+    :param conf:
+    :param size:
+    :param local_path:
+    :param local_filename:
+    :param secure:
+    :return:
+    """
+
+    url = f'{conf.img_secure_base_url if secure else conf.img_base_url}' \
+          f'{size}/{img_name}'
+    r = requests.get(url, stream=True)
+    # todo: should be better to return the raw data, let another function
+    # todo: write the file
+    if r.status_code == 200:
+        with open(os.path.join(local_path, local_filename), 'wb') as fh:
+            for chunk in r.iter_content(1024):
+                fh.write(chunk)
+
+
+def get_image(show_id, local_folder, local_filename):
+    s = session_factory('tv', k)
+    c = Configuration.getconfig(s)
+    show = s.get_show(show_id)
+    _get_image(c, show.poster, PosterSizes.original, local_folder,
+               local_filename)
+
 
 if __name__ == '__main__':
-    k = os.environ.get('TMDB_API_KEY', 'secret')
+    # k = os.environ.get('TMDB_API_KEY', 'secret')
     print(k)
     s = session_factory('tv', k)
     # title = 'Grimm'
@@ -242,10 +322,14 @@ if __name__ == '__main__':
     # shows = s.search_show('swamp thing', exact=True)
     # print('\n'.join([str(show) for show in shows]))
     supergirl = 62688
-    # show = s.get_show(supergirl)
-    show, seasons = s.get_show_and_seasons(supergirl)
-    for season in seasons:
-        print(f'Season {season.season_number} '
-              f'({len(season.episodes):02} episodes)')
-        for episode in season.episodes:
-            print(f'\t{episode.number:02} - {episode.name}')
+    c = Configuration.getconfig(s)
+    show = s.get_show(supergirl)
+    get_image(c, show.poster, PosterSizes.original, '.', 'supergirl.jpg')
+    print("")
+
+    # show, seasons = s.get_show_and_seasons(supergirl)
+    # for season in seasons:
+    #     print(f'Season {season.season_number} '
+    #           f'({len(season.episodes):02} episodes)')
+    #     for episode in season.episodes:
+    #         print(f'\t{episode.number:02} - {episode.name}')

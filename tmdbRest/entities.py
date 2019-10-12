@@ -149,7 +149,7 @@ class Character(Entity):
     def character(self):
         return self._charname
 
-    @@property
+    @property
     def gender(self):
         return self._gender.name
 
@@ -179,7 +179,7 @@ class TvShow(TvShowFromSearch):
     def __init__(self, results):
         Entity.__init__(self, results)
         self.seasons = list()
-        self._characters = (Character.parse(results['guest_stars']))
+        # self._characters = (Character.parse(results['guest_stars']))
 
     def is_in_production(self):
         """
@@ -252,7 +252,7 @@ class Episode(Entity):
     def __init__(self, results):
         Entity.__init__(self, results)
         self._crew = results['crew']
-        self._characters =
+        self._characters = None
         self._guest_stars = results['guest_stars']
 
     @property
