@@ -1,26 +1,27 @@
 # tmdbapi.py
 
+from dotenv import load_dotenv
 import enum
 import json
 import os
 from pprint import pprint
 import requests
 import shutil
-from typing import Type, ClassVar
-import tmdbRest.entities as ent
-import tmdbRest.genres as generi
+from typing import Type, ClassVar, Union, Any, Optional, List, Tuple, Generic
 
-__doc__ = """tmdbapi.py"""
-__version__ = "0.1"
+import entities as ent
+
+__doc__ = """Wrapper to 'The Movie Database APIs"""
+__version__ = "0.2"
 __changelog__ = """
 
 """
 
-k = '142b8d3c9048ff091ada7cd22ca6dff0'
+load_dotenv()
 
 
 class Media(enum.Enum):
-    """Represent a media"""
+    """Represents a media"""
     unknown = 0
     movie = 1
     tv = 2
@@ -58,24 +59,12 @@ ROUTES = {
     'genres': r'genre/{}/list',  # Movies or TV
     'person': r'person/{}',  # Generic
     'item': r'{}/{}',  # Generic item by id
-    'episode': r'tv/{}/season/{}/episode/{}',  # Tv
-    'season': r'tv/{}/season/{}',
+    'episode': r'tv/{}/season/{}/episode/{}',  # Tv episode detail
+    'season': r'tv/{}/season/{}',  # Tv season
 }
 
 
-def _get_route_old(action: str,  subroute: SearchType):
-    """
-    Compose the api call, depending on `media`
-    :param action: action to perform
-    :param subroute: media type
-    :return:the call to tmdb
-    """
-    if action not in ROUTES:
-        return None
-    return f"{ROUTES['root']}{ROUTES[action].format(subroute.name)}"
-
-
-def _get_route(action: str,  params):
+def _get_route(action: str,  params: Union[tuple, Any]) -> Union[str, None]:
     """
     Compose the api call, depending on `media`
     :param action: action to perform
@@ -84,17 +73,21 @@ def _get_route(action: str,  params):
     if action not in ROUTES:
         return None
     if not isinstance(params, tuple):
-        params = params,
+        params = params,  # Make it a tuple
     # print()
     return f"{ROUTES['root']}{ROUTES[action].format(*params)}"
 
 
+# todo: Further implementations needed for sizez
+
 
 class _Sizes:
+    """Represents a tmdbapi defined key for image sizing"""
     original: ClassVar['str'] = "original"
 
 
 class PosterSizes(_Sizes):
+    """Poster images size specs allowed"""
     w92: ClassVar['str'] = "w92"
     w154: ClassVar['str'] = "w154"
     w185: ClassVar['str'] = "w185"
@@ -102,34 +95,6 @@ class PosterSizes(_Sizes):
     w500: ClassVar['str'] = "w500"
     w780: ClassVar['str'] = "w780"
 
-
-class Configuration:
-    """Site wide infos"""
-    def __init__(self):
-        self.img_base_url = None
-        self.img_secure_base_url = None
-        self.img_backdrop_sizes = list()
-        self.img_logo_sizes = list()
-        self.img_poster_sizes = list()
-        self.img_profile_sizes = list()
-        self.img_still_sizes = list()
-        self.change_keys = list()
-
-    @staticmethod
-    def getconfig(session):
-        conf = Configuration()
-        route = _get_route('config', None)
-        payload = session._get_payload()
-        resp = requests.get(route, payload).json()
-        conf.img_base_url = resp['images']['base_url']
-        conf.img_secure_base_url = resp['images']['secure_base_url']
-        conf.img_backdrop_sizes = resp['images']['backdrop_sizes']
-        conf.img_logo_sizes = resp['images']['logo_sizes']
-        conf.img_poster_sizes = resp['images']['poster_sizes']
-        conf.img_profile_sizes = resp['images']['profile_sizes']
-        conf.img_still_sizes = resp['images']['still_sizes']
-        conf.change_keys = resp['change_keys']
-        return conf
 
 
 class TmDBSessionException(Exception):
@@ -179,7 +144,7 @@ class TmDBSession:
         payload = {'api_key': self._api_key, 'language': self._lang}
         return payload
 
-    def search(self, query, search_type: SearchType) -> dict:
+    def search(self, query: str, search_type: SearchType) -> dict:
         """
         Generic search
         :param query:
@@ -216,16 +181,25 @@ class TmDBSession:
 
 class TmDBMovieSession(TmDBSession):
     """Session for movies"""
+    # todo: To implement
     def __init__(self, api_key, language=None):
         TmDBSession.__init__(self, api_key, language, Media.movie)
 
 
 class TmDBTvSession(TmDBSession):
     """Session for television"""
-    def __init__(self, api_key: str, language=None):
+    def __init__(self, api_key: str, language: Union[str, None] = None):
         TmDBSession.__init__(self, api_key, language, Media.tv)
 
-    def search_show(self, showname: str, exact=False):
+    def search_show(self, showname: str, exact=False) \
+            -> List[ent.TvShowFromSearch]:
+        """
+        Search for `showname`
+
+        :param showname: the pattern to find
+        :param exact: if `True` returns the show matching the pattern exac
+        :return:
+        """
         resp = self.search(showname, SearchType.tv)
         if 'success' in resp and not resp['success']:
             raise TmDBSessionException(
@@ -246,9 +220,12 @@ class TmDBTvSession(TmDBSession):
         """
         return ent.TvShow(self.get_item(show_id, SearchType.tv))
 
-    def get_show_and_seasons(self, show_id: int) -> tuple:
+    def get_show_and_seasons(self, show_id: int) -> Tuple[ent.TvShow,
+                                                          List[ent.Season]]:
         """
-        Get info for the show number `show_id` and all the seaason
+        Convenience method: get info for the show number `show_id` and
+        all the seaasons
+
         :param show_id:
         :return: A TvShow object and a list of Season objects
         """
@@ -261,7 +238,9 @@ class TmDBTvSession(TmDBSession):
 
     def get_show_seasons_and_episodes(self, show_id: int) -> tuple:
         """
-        Get info for the show number `show_id`, all the seaason end episodes
+        Convenience method: get info for the show number `show_id`,
+        all the seaason end episodes
+
         :param show_id:
         :return: A TvShow object and a list of Season objects with a list of
                  Episodes
@@ -269,12 +248,52 @@ class TmDBTvSession(TmDBSession):
         pass  # TODO:
 
 
+class Configuration:
+    """Some generic info needed for image managing"""
+    def __init__(self):
+        self.img_base_url = None
+        self.img_secure_base_url = None
+        self.img_backdrop_sizes = list()
+        self.img_logo_sizes = list()
+        self.img_poster_sizes = list()
+        self.img_profile_sizes = list()
+        self.img_still_sizes = list()
+        self.change_keys = list()
+
+    @staticmethod
+    def getconfig(session: TmDBSession) -> Any:
+        """Get a `Configuration` object"""
+        conf = Configuration()
+        route = _get_route('config', None)
+        payload = session._get_payload()
+        resp = requests.get(route, payload).json()
+        conf.img_base_url = resp['images']['base_url']
+        conf.img_secure_base_url = resp['images']['secure_base_url']
+        conf.img_backdrop_sizes = resp['images']['backdrop_sizes']
+        conf.img_logo_sizes = resp['images']['logo_sizes']
+        conf.img_poster_sizes = resp['images']['poster_sizes']
+        conf.img_profile_sizes = resp['images']['profile_sizes']
+        conf.img_still_sizes = resp['images']['still_sizes']
+        conf.change_keys = resp['change_keys']
+        return conf
+
+
 def session_factory(media_type: str, apy_key: str,
-                    language=None):
+                    lang=None) -> Type[Union[TmDBMovieSession, TmDBTvSession]]:
+    """
+    Get a TMDBSession, raises a `TmDBSessionException` if `media_type` is not
+    a known key, you can pass  'movies, films, cinema' or
+    'tv, television, t.v., tube, tele'
+
+    :param media_type: media to query (tv or movie)
+    :param apy_key: the secret TMDB api key
+    :param language: localization value (ed. it for Italian, fr for French ...
+    :return: the approriate `TMDBSession` object
+    """
     if _parse_media(media_type.lower()) == Media.movie:
-        return TmDBMovieSession(apy_key, language)
+        return TmDBMovieSession(apy_key, lang)
     elif _parse_media(media_type.lower()) == Media.tv:
-        return TmDBTvSession(apy_key, language)
+        return TmDBTvSession(apy_key, lang)
     else:
         raise TmDBSessionException(f'media {media_type} unknown')
 
@@ -298,38 +317,55 @@ def _get_image(conf: Configuration, img_name: str,
           f'{size}/{img_name}'
     r = requests.get(url, stream=True)
     # todo: should be better to return the raw data, let another function
-    # todo: write the file
+    # todo: write the local file
     if r.status_code == 200:
         with open(os.path.join(local_path, local_filename), 'wb') as fh:
             for chunk in r.iter_content(1024):
                 fh.write(chunk)
 
 
-def get_image(show_id, local_folder, local_filename):
-    s = session_factory('tv', k)
-    c = Configuration.getconfig(s)
-    show = s.get_show(show_id)
-    _get_image(c, show.poster, PosterSizes.original, local_folder,
+def get_image(apikey: str, show_id: str, local_folder: str,
+              local_filename: str):
+    """
+    Download a series poster for the `show_id` into
+    `local_folder\\local_filename`
+
+    :param apikey:
+    :param show_id:
+    :param local_folder:
+    :param local_filename:
+    :return:
+    """
+    session = session_factory('tv', apikey)
+    conf = Configuration.getconfig(session)
+    show = session.get_show(show_id)
+    _get_image(conf, show.poster, PosterSizes.original, local_folder,
                local_filename)
 
 
-if __name__ == '__main__':
-    # k = os.environ.get('TMDB_API_KEY', 'secret')
-    print(k)
-    s = session_factory('tv', k)
-    # title = 'Grimm'
-    # shows = s.search_show(title, exact=True)
-    # shows = s.search_show('swamp thing', exact=True)
-    # print('\n'.join([str(show) for show in shows]))
-    supergirl = 62688
-    c = Configuration.getconfig(s)
-    show = s.get_show(supergirl)
-    get_image(c, show.poster, PosterSizes.original, '.', 'supergirl.jpg')
-    print("")
+def SampleUsagesTV(session: TmDBTvSession, usage: str, *args):
+    """Demonstrate main usages"""
+    if usage == 'find exact':
+        return session.search_show(args[0], exact=True)
+    elif usage == 'find many':
+        return session.search_show(args[0], exact=False)
+    elif usage == 'get show':
+        return session.get_show(args[0])
+    elif usage == 'get seasons':
+        return session.get_show_and_seasons(62688)
 
-    # show, seasons = s.get_show_and_seasons(supergirl)
-    # for season in seasons:
-    #     print(f'Season {season.season_number} '
-    #           f'({len(season.episodes):02} episodes)')
-    #     for episode in season.episodes:
-    #         print(f'\t{episode.number:02} - {episode.name}')
+
+if __name__ == '__main__':
+    apikey = os.environ.get('TMDB_APIKEY', 'secret')
+    session = session_factory('tv', apikey)
+    print(SampleUsagesTV(session, 'find exact', 'Grimm'))
+    print(SampleUsagesTV(session, 'find many', 'Swamp Thing'))
+    print(SampleUsagesTV(session, 'get show', 62688))
+    show, seasons = SampleUsagesTV(session, 'get seasons', 62688)
+    for season in seasons:
+        print(f'Season {season.season_number} '
+              f'({len(season.episodes):02} episodes)')
+        for episode in season.episodes:
+            print(f'\t{episode.number:02} - {episode.name}')
+
+

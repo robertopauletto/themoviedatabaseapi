@@ -1,3 +1,5 @@
 .idea/
 tmdbRest/__pycache__
 docs
+tmdbRest/.env
+
