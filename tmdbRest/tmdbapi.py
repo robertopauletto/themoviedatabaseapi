@@ -254,8 +254,16 @@ class TmDBTvSession(TmDBSession):
         payload = self.get_payload()
         payload['language'] = self.language
         resp = requests.get(route, payload)
+        page_coll = ent.DailyTvProgramsCollection()
         at = ent.DailyTvPrograms(resp.json())
-        return at
+        page_coll.add_page(at)
+        for i in range(2, at.total_pages + 1):
+            if i > at.total_pages:  # unlikely but protects from 1 page results
+                break
+            payload['page'] = i
+            resp = requests.get(route, payload)
+            page_coll.add_page(ent.DailyTvPrograms(resp.json()))
+        return page_coll
 
 
 class Configuration:
@@ -365,7 +373,9 @@ def SampleUsagesTV(session: TmDBTvSession, usage: str, *args):
     elif usage == 'get seasons':
         return session.get_show_and_seasons(62688)
     elif usage == 'air today':
-        return session.airing_today()
+        shows = session.airing_today()
+        for show in shows.get_shows():
+            print(f'{show[0]} - {show[1]}')
 
 
 if __name__ == '__main__':

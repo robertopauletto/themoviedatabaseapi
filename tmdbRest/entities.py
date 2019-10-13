@@ -236,10 +236,17 @@ class Episode(Entity):
 
 
 class DailyTvPrograms:
-    """Programs airing today """
+    """Represents a page of programs airing today """
 
     def __init__(self, resp_json: dict):
         self._resp = resp_json
+        self.aired_shows = self._resp['results']
+        self.page = self._resp['page']
+        self._tot_pages = self._resp['total_pages']
+
+    @property
+    def total_pages(self):
+        return int(self._tot_pages)
 
     @property
     def total_results(self) -> int:
@@ -247,8 +254,22 @@ class DailyTvPrograms:
 
     def get_shows(self) -> List[Tuple[int, str]]:
         """Return the shows on air today"""
-        return [(show['id'], show['name']) for show in self._resp['results']]
+        return [(show['id'], show['name']) for show in self.aired_shows]
 
+
+class DailyTvProgramsCollection:
+    """Collection of daily programs pages"""
+    def __init__(self):
+        self._programs_pages = list()
+
+    def add_page(self, page):
+        self._programs_pages.append(page)
+
+    def get_shows(self):
+        retval = list()
+        for page in self._programs_pages:
+            retval.extend(page.get_shows())
+        return retval
 
 if __name__ == '__main__':
     pass
