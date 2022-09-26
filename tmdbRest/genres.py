@@ -1,28 +1,23 @@
 # genres.py
 
-__doc__ = """genres.py"""
-__version__ = "0.1"
-__changelog__ = """
-
-"""
+__doc__ = """Show Genres"""
 
 
 class Genre:
     """Represents a genre"""
-    def __init__(self, id, name):
+    def __init__(self, id: int, name: str):
         self._id = id
-        self._name = name
+        self.name = name
 
-    @property
-    def name(self):
-        return self._name
+    def __repr__(self) -> str:
+        return f'<Genre {self._id} - {self.name}>'
 
-    def __repr__(self):
+    def __str__(self) -> str:
         return f'{self._id} - {self.name}'
 
-    @staticmethod
-    def load(genres):
-        """Generates a genres list from a list of strings"""
+    @classmethod
+    def load(cls, genres: list) -> list:
+        """Generates a list of `Genre` instances from a list of strings"""
         return [Genre(*item) for item in genres]
 
 
