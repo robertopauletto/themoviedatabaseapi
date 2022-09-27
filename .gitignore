@@ -1,5 +1,4 @@
 .idea/
-tmdbRest/__pycache__
+tmdbapi/__pycache__
 docs
-tmdbRest/.env
-
+tmdbapi/.env

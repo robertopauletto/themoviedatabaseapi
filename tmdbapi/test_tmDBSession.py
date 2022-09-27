@@ -4,7 +4,7 @@ from unittest import TestCase
 
 from dotenv import load_dotenv
 
-import tmdbRest.tmdbapi as api
+import tmdbapi.tmdbapi as api
 import entities as ent
 
 
